@@ -41,11 +41,19 @@ cd umbrella_mcp
 ### 2. Get API Credentials
 
 1. Log in to the [Cisco Umbrella Dashboard](https://dashboard.umbrella.com)
-2. Navigate to **Admin → API Keys**
+2. Navigate to **Admin → API Keys** (under the Admin section in the left sidebar)
 3. Click **Create** to generate a new API key pair
-4. Select the scopes you need (Reports, Deployments, Policies, Investigate, Admin)
-5. Copy the **Client ID** and **Client Secret**
-6. Note your **Organization ID** if using multi-tenant mode
+4. Give the key a descriptive name (e.g., `MCP-Server-Key`)
+5. Under **Key Scope**, select the scopes you need:
+   - **Reports** — Required for DNS activity, top threats, top destinations, summaries
+   - **Deployments** — Required for roaming computers, tunnel groups, sites
+   - **Policies** — Required for destination lists, private resources, access policies
+   - **Investigate** — Required for domain/IP/URL threat lookups
+   - **Admin** — Required for VPN connections, alerts, integrations
+6. Copy the **Client ID** and **Client Secret** (the secret is only shown once!)
+7. Note your **Organization ID** (visible in the Umbrella dashboard URL or under Admin → Accounts)
+
+> **Important:** Each API key is scoped to the **organization** you are logged into when you create it. If you manage multiple Umbrella organizations, see [Multi-Tenant Setup](#multi-tenant-setup) below.
 
 ### 3. Configure Environment
 
@@ -53,13 +61,91 @@ cd umbrella_mcp
 cp .env-example .env
 ```
 
-Edit `.env` with your credentials:
+#### Single Organization (most common)
+
+If you only manage one Umbrella organization, your `.env` is straightforward:
 
 ```env
+# Required — from Umbrella Admin → API Keys
 CISCO_CLIENT_ID="your-client-id-here"
 CISCO_CLIENT_SECRET="your-client-secret-here"
-CISCO_ORG_ID="your-org-id"          # Optional, for multi-tenant
+
+# Optional — set this if API calls return data for the wrong org,
+# or if your account has access to multiple orgs
+CISCO_ORG_ID=""
 ```
+
+#### Multi-Tenant Setup
+
+If you manage multiple Umbrella organizations (e.g., as an MSP or with parent/child orgs), you need to understand how API keys and Org IDs work together:
+
+**How it works:** When you create an API key in Umbrella, that key is generated **within the context of the organization you're currently logged into**. The key's credentials (Client ID + Secret) authenticate you, and the `CISCO_ORG_ID` tells the API which organization's data to return via the `X-Umbrella-OrgId` header.
+
+**To set up multi-tenant access:**
+
+1. Log into the Umbrella dashboard for your **parent/management organization**
+2. Create an API key there with the scopes you need
+3. Find each child organization's Org ID:
+   - Go to **Admin → Accounts** in the Umbrella dashboard
+   - Or check the URL — it typically contains the org ID (e.g., `https://dashboard.umbrella.com/o/1234567/`)
+4. Set `CISCO_ORG_ID` in your `.env` to the org you want to query
+
+```env
+# Required — API key created in the PARENT/management organization
+CISCO_CLIENT_ID="your-parent-org-client-id"
+CISCO_CLIENT_SECRET="your-parent-org-client-secret"
+
+# Required for multi-tenant — specify which child org to query
+# This sends the X-Umbrella-OrgId header with every API request
+CISCO_ORG_ID="1234567"
+```
+
+> **Note:** If you need to query multiple organizations simultaneously, you would run **separate instances** of the MCP server, each with its own `.env` pointing to a different `CISCO_ORG_ID`. In your `claude_desktop_config.json`, give each instance a unique name (e.g., `Umbrella_OrgA`, `Umbrella_OrgB`).
+
+**Example — running two orgs side by side:**
+
+Create separate `.env` files:
+
+```bash
+# .env.org-a
+CISCO_CLIENT_ID="parent-key-client-id"
+CISCO_CLIENT_SECRET="parent-key-client-secret"
+CISCO_ORG_ID="1111111"
+
+# .env.org-b
+CISCO_CLIENT_ID="parent-key-client-id"
+CISCO_CLIENT_SECRET="parent-key-client-secret"
+CISCO_ORG_ID="2222222"
+```
+
+Then in `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "Umbrella_OrgA": {
+      "command": "/path/to/umbrella_mcp/.venv/bin/python",
+      "args": ["/path/to/umbrella_mcp/umbrella-mcp.py"],
+      "env": {
+        "CISCO_CLIENT_ID": "parent-key-client-id",
+        "CISCO_CLIENT_SECRET": "parent-key-client-secret",
+        "CISCO_ORG_ID": "1111111"
+      }
+    },
+    "Umbrella_OrgB": {
+      "command": "/path/to/umbrella_mcp/.venv/bin/python",
+      "args": ["/path/to/umbrella_mcp/umbrella-mcp.py"],
+      "env": {
+        "CISCO_CLIENT_ID": "parent-key-client-id",
+        "CISCO_CLIENT_SECRET": "parent-key-client-secret",
+        "CISCO_ORG_ID": "2222222"
+      }
+    }
+  }
+}
+```
+
+> **Tip:** When using the `env` block in `claude_desktop_config.json`, those values override whatever is in the `.env` file. This is the cleanest approach for multi-org setups since you can reuse the same codebase.
 
 ### 4. Install Dependencies
 
