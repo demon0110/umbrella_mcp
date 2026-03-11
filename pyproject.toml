@@ -1,0 +1,11 @@
+[project]
+name = "umbrella-mcp"
+version = "1.0.0"
+description = "Cisco Secure Access (Umbrella) MCP Server"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp[cli]>=1.0.0",
+    "httpx>=0.27.0",
+    "pydantic>=2.0.0",
+    "python-dotenv>=1.0.0",
+]
