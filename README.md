@@ -6,7 +6,7 @@ A production-ready [Model Context Protocol (MCP)](https://modelcontextprotocol.i
 
 - **OAuth2 Authentication** — Automatic token management via client credentials flow with 60-second refresh buffer
 - **87+ API Endpoints** — Covers Admin, Deployments, Reports, Investigate, and Policies sections
-- **13 Pre-Registered Tools** — Optimized tools for the most common operations (VPN, DNS, threats, tunnels, etc.)
+- **12 Pre-Registered Tools** — Optimized tools for the most common operations (VPN, DNS, threats, tunnels, etc.)
 - **Generic API Gateway** — `call_umbrella_api` tool provides access to all 87+ registered endpoints
 - **Two-Tier Caching** — In-memory + file-based caching with configurable TTL (default 5 min)
 - **Multi-Tenant Support** — Optional `X-Umbrella-OrgId` header for multi-org environments
@@ -21,7 +21,7 @@ A production-ready [Model Context Protocol (MCP)](https://modelcontextprotocol.i
 │   Claude Desktop /   │     │   Umbrella MCP       │     │   Cisco Umbrella     │
 │   AI Assistant       │────▶│   Server (FastMCP)   │────▶│   API                │
 │                      │ MCP │                      │HTTP │                      │
-│   - 13 direct tools  │◀────│   - OAuth2 tokens    │◀────│   - Reports v2       │
+│   - 12 direct tools  │◀────│   - OAuth2 tokens    │◀────│   - Reports v2       │
 │   - Generic API call │     │   - Request caching  │     │   - Deployments v2   │
 │   - Method discovery │     │   - File caching     │     │   - Policies v2      │
 └──────────────────────┘     └──────────────────────┘     │   - Admin v2         │
@@ -190,7 +190,7 @@ After saving the config, fully restart Claude Desktop. The Umbrella MCP tools sh
 
 ## Available Tools
 
-### Pre-Registered Tools (13)
+### Pre-Registered Tools (12)
 
 These are first-class MCP tools optimized for the most common workflows:
 
@@ -204,7 +204,6 @@ These are first-class MCP tools optimized for the most common workflows:
 | `getRemoteAccessEvents` | Get remote access events | `time_from`, `time_to` |
 | `getSummary` | Get summary statistics | `time_from`, `time_to` |
 | `getTopThreats` | Get top threats by count | `time_from`, `time_to`, `limit` |
-| `getTopDestinations` | Get top destinations | `time_from`, `time_to`, `verdict` |
 | `getTopIdentities` | Get top users/identities | `time_from`, `time_to`, `limit` |
 | `getRoamingComputers` | Get endpoint inventory | `limit`, `offset` |
 | `getNetworkTunnelGroups` | Get all tunnel groups | — |

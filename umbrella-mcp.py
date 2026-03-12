@@ -914,32 +914,6 @@ async def getTopThreats(
     return await http_client.get("/reports/v2/top-threats", params=params)
 
 
-@mcp.tool()
-async def getTopDestinations(
-    time_from: str = "-1days",
-    time_to: str = "now",
-    limit: Optional[int] = None,
-    verdict: Optional[str] = None
-) -> Dict[str, Any]:
-    """Get top destinations.
-
-    Args:
-        time_from: Start time — ISO 8601 format or relative like "-1days", "-7days" (default: "-1days")
-        time_to: End time — ISO 8601 format or "now" (default: "now")
-        limit: Maximum results
-        verdict: Filter by verdict (blocked, allowed, etc)
-
-    Returns:
-        Top destinations
-    """
-    params = {"from": time_from, "to": time_to}
-    if limit:
-        params["limit"] = min(limit, max_per_page)
-    if verdict:
-        params["verdict"] = verdict
-
-    return await http_client.get("/reports/v2/top-destinations", params=params)
-
 
 @mcp.tool()
 async def getTopIdentities(
