@@ -9,7 +9,7 @@ import json
 import time
 import hashlib
 import asyncio
-from typing import Optional, Any, Dict, List
+from typing import Optional, Any, Dict, List, Union
 from datetime import datetime, timedelta
 from pathlib import Path
 from contextlib import asynccontextmanager
@@ -108,7 +108,7 @@ class SecureAccessClient:
                      params: Optional[Dict] = None,
                      json_body: Optional[Dict] = None,
                      headers: Optional[Dict] = None,
-                     retry_on_401: bool = True) -> Dict[str, Any]:
+                     retry_on_401: bool = True) -> Any:
         """Make HTTP request with caching."""
 
         # Build headers
@@ -177,21 +177,21 @@ class SecureAccessClient:
         return data
 
     async def get(self, path: str, params: Optional[Dict] = None,
-                 headers: Optional[Dict] = None) -> Dict[str, Any]:
+                 headers: Optional[Dict] = None) -> Any:
         """GET request."""
         return await self.request("GET", path, params=params, headers=headers)
 
     async def put(self, path: str, json_body: Optional[Dict] = None,
-                 headers: Optional[Dict] = None) -> Dict[str, Any]:
+                 headers: Optional[Dict] = None) -> Any:
         """PUT request."""
         return await self.request("PUT", path, json_body=json_body, headers=headers)
 
     async def post(self, path: str, json_body: Optional[Dict] = None,
-                  headers: Optional[Dict] = None) -> Dict[str, Any]:
+                  headers: Optional[Dict] = None) -> Any:
         """POST request."""
         return await self.request("POST", path, json_body=json_body, headers=headers)
 
-    async def delete(self, path: str, headers: Optional[Dict] = None) -> Dict[str, Any]:
+    async def delete(self, path: str, headers: Optional[Dict] = None) -> Any:
         """DELETE request."""
         return await self.request("DELETE", path, headers=headers)
 
@@ -727,8 +727,8 @@ async def getVpnUserConnections(
 
 @mcp.tool()
 async def getActivityDns(
-    time_from: Optional[str] = None,
-    time_to: Optional[str] = None,
+    time_from: str = "-1days",
+    time_to: str = "now",
     limit: Optional[int] = None,
     offset: Optional[int] = None,
     domains: Optional[str] = None,
@@ -737,8 +737,8 @@ async def getActivityDns(
     """Get DNS activity records.
 
     Args:
-        time_from: Start time (ISO 8601 format)
-        time_to: End time (ISO 8601 format)
+        time_from: Start time — ISO 8601 format or relative like "-1days", "-7days" (default: "-1days")
+        time_to: End time — ISO 8601 format or "now" (default: "now")
         limit: Maximum results per page
         offset: Pagination offset
         domains: Filter by domains (comma-separated)
@@ -747,11 +747,7 @@ async def getActivityDns(
     Returns:
         DNS activity records
     """
-    params = {}
-    if time_from:
-        params["from"] = time_from
-    if time_to:
-        params["to"] = time_to
+    params = {"from": time_from, "to": time_to}
     if limit:
         params["limit"] = min(limit, max_per_page)
     if offset:
@@ -766,8 +762,8 @@ async def getActivityDns(
 
 @mcp.tool()
 async def getActivityProxy(
-    time_from: Optional[str] = None,
-    time_to: Optional[str] = None,
+    time_from: str = "-1days",
+    time_to: str = "now",
     limit: Optional[int] = None,
     offset: Optional[int] = None,
     verdict: Optional[str] = None
@@ -775,8 +771,8 @@ async def getActivityProxy(
     """Get proxy activity records.
 
     Args:
-        time_from: Start time (ISO 8601 format)
-        time_to: End time (ISO 8601 format)
+        time_from: Start time — ISO 8601 format or relative like "-1days", "-7days" (default: "-1days")
+        time_to: End time — ISO 8601 format or "now" (default: "now")
         limit: Maximum results per page
         offset: Pagination offset
         verdict: Filter by verdict
@@ -784,11 +780,7 @@ async def getActivityProxy(
     Returns:
         Proxy activity records
     """
-    params = {}
-    if time_from:
-        params["from"] = time_from
-    if time_to:
-        params["to"] = time_to
+    params = {"from": time_from, "to": time_to}
     if limit:
         params["limit"] = min(limit, max_per_page)
     if offset:
@@ -801,27 +793,23 @@ async def getActivityProxy(
 
 @mcp.tool()
 async def getActivityFirewall(
-    time_from: Optional[str] = None,
-    time_to: Optional[str] = None,
+    time_from: str = "-1days",
+    time_to: str = "now",
     limit: Optional[int] = None,
     offset: Optional[int] = None
 ) -> Dict[str, Any]:
     """Get firewall activity records.
 
     Args:
-        time_from: Start time (ISO 8601 format)
-        time_to: End time (ISO 8601 format)
+        time_from: Start time — ISO 8601 format or relative like "-1days", "-7days" (default: "-1days")
+        time_to: End time — ISO 8601 format or "now" (default: "now")
         limit: Maximum results per page
         offset: Pagination offset
 
     Returns:
         Firewall activity records
     """
-    params = {}
-    if time_from:
-        params["from"] = time_from
-    if time_to:
-        params["to"] = time_to
+    params = {"from": time_from, "to": time_to}
     if limit:
         params["limit"] = min(limit, max_per_page)
     if offset:
@@ -832,27 +820,23 @@ async def getActivityFirewall(
 
 @mcp.tool()
 async def getActivityZtna(
-    time_from: Optional[str] = None,
-    time_to: Optional[str] = None,
+    time_from: str = "-1days",
+    time_to: str = "now",
     limit: Optional[int] = None,
     offset: Optional[int] = None
 ) -> Dict[str, Any]:
     """Get ZTNA activity records.
 
     Args:
-        time_from: Start time (ISO 8601 format)
-        time_to: End time (ISO 8601 format)
+        time_from: Start time — ISO 8601 format or relative like "-1days", "-7days" (default: "-1days")
+        time_to: End time — ISO 8601 format or "now" (default: "now")
         limit: Maximum results per page
         offset: Pagination offset
 
     Returns:
         ZTNA activity records
     """
-    params = {}
-    if time_from:
-        params["from"] = time_from
-    if time_to:
-        params["to"] = time_to
+    params = {"from": time_from, "to": time_to}
     if limit:
         params["limit"] = min(limit, max_per_page)
     if offset:
@@ -863,27 +847,23 @@ async def getActivityZtna(
 
 @mcp.tool()
 async def getRemoteAccessEvents(
-    time_from: Optional[str] = None,
-    time_to: Optional[str] = None,
+    time_from: str = "-1days",
+    time_to: str = "now",
     limit: Optional[int] = None,
     offset: Optional[int] = None
 ) -> Dict[str, Any]:
     """Get remote access events.
 
     Args:
-        time_from: Start time (ISO 8601 format)
-        time_to: End time (ISO 8601 format)
+        time_from: Start time — ISO 8601 format or relative like "-1days", "-7days" (default: "-1days")
+        time_to: End time — ISO 8601 format or "now" (default: "now")
         limit: Maximum results per page
         offset: Pagination offset
 
     Returns:
         Remote access events
     """
-    params = {}
-    if time_from:
-        params["from"] = time_from
-    if time_to:
-        params["to"] = time_to
+    params = {"from": time_from, "to": time_to}
     if limit:
         params["limit"] = min(limit, max_per_page)
     if offset:
@@ -894,48 +874,40 @@ async def getRemoteAccessEvents(
 
 @mcp.tool()
 async def getSummary(
-    time_from: Optional[str] = None,
-    time_to: Optional[str] = None
+    time_from: str = "-1days",
+    time_to: str = "now"
 ) -> Dict[str, Any]:
     """Get summary statistics.
 
     Args:
-        time_from: Start time (ISO 8601 format)
-        time_to: End time (ISO 8601 format)
+        time_from: Start time — ISO 8601 format or relative like "-1days", "-7days" (default: "-1days")
+        time_to: End time — ISO 8601 format or "now" (default: "now")
 
     Returns:
         Summary statistics
     """
-    params = {}
-    if time_from:
-        params["from"] = time_from
-    if time_to:
-        params["to"] = time_to
+    params = {"from": time_from, "to": time_to}
 
     return await http_client.get("/reports/v2/summary", params=params)
 
 
 @mcp.tool()
 async def getTopThreats(
-    time_from: Optional[str] = None,
-    time_to: Optional[str] = None,
+    time_from: str = "-1days",
+    time_to: str = "now",
     limit: Optional[int] = None
 ) -> Dict[str, Any]:
     """Get top threats.
 
     Args:
-        time_from: Start time (ISO 8601 format)
-        time_to: End time (ISO 8601 format)
+        time_from: Start time — ISO 8601 format or relative like "-1days", "-7days" (default: "-1days")
+        time_to: End time — ISO 8601 format or "now" (default: "now")
         limit: Maximum results
 
     Returns:
         Top threats
     """
-    params = {}
-    if time_from:
-        params["from"] = time_from
-    if time_to:
-        params["to"] = time_to
+    params = {"from": time_from, "to": time_to}
     if limit:
         params["limit"] = min(limit, max_per_page)
 
@@ -944,27 +916,23 @@ async def getTopThreats(
 
 @mcp.tool()
 async def getTopDestinations(
-    time_from: Optional[str] = None,
-    time_to: Optional[str] = None,
+    time_from: str = "-1days",
+    time_to: str = "now",
     limit: Optional[int] = None,
     verdict: Optional[str] = None
 ) -> Dict[str, Any]:
     """Get top destinations.
 
     Args:
-        time_from: Start time (ISO 8601 format)
-        time_to: End time (ISO 8601 format)
+        time_from: Start time — ISO 8601 format or relative like "-1days", "-7days" (default: "-1days")
+        time_to: End time — ISO 8601 format or "now" (default: "now")
         limit: Maximum results
-        verdict: Filter by verdict
+        verdict: Filter by verdict (blocked, allowed, etc)
 
     Returns:
         Top destinations
     """
-    params = {}
-    if time_from:
-        params["from"] = time_from
-    if time_to:
-        params["to"] = time_to
+    params = {"from": time_from, "to": time_to}
     if limit:
         params["limit"] = min(limit, max_per_page)
     if verdict:
@@ -975,25 +943,21 @@ async def getTopDestinations(
 
 @mcp.tool()
 async def getTopIdentities(
-    time_from: Optional[str] = None,
-    time_to: Optional[str] = None,
+    time_from: str = "-1days",
+    time_to: str = "now",
     limit: Optional[int] = None
 ) -> Dict[str, Any]:
     """Get top identities.
 
     Args:
-        time_from: Start time (ISO 8601 format)
-        time_to: End time (ISO 8601 format)
+        time_from: Start time — ISO 8601 format or relative like "-1days", "-7days" (default: "-1days")
+        time_to: End time — ISO 8601 format or "now" (default: "now")
         limit: Maximum results
 
     Returns:
         Top identities
     """
-    params = {}
-    if time_from:
-        params["from"] = time_from
-    if time_to:
-        params["to"] = time_to
+    params = {"from": time_from, "to": time_to}
     if limit:
         params["limit"] = min(limit, max_per_page)
 
@@ -1004,7 +968,7 @@ async def getTopIdentities(
 async def getRoamingComputers(
     limit: Optional[int] = None,
     offset: Optional[int] = None
-) -> Dict[str, Any]:
+) -> Union[Dict[str, Any], List[Any]]:
     """Get roaming computers (endpoints).
 
     Args:
@@ -1020,7 +984,11 @@ async def getRoamingComputers(
     if offset:
         params["offset"] = offset
 
-    return await http_client.get("/deployments/v2/roamingcomputers", params=params)
+    result = await http_client.get("/deployments/v2/roamingcomputers", params=params)
+    # Umbrella returns a list for this endpoint; wrap it for consistent MCP response
+    if isinstance(result, list):
+        return {"result": result, "count": len(result)}
+    return result
 
 
 @mcp.tool()
