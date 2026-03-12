@@ -74,8 +74,11 @@ class SecureAccessClient:
                  enable_caching: bool = True, cache_ttl: int = 300,
                  enable_file_caching: bool = True,
                  cache_dir: Optional[str] = None,
-                 org_id: Optional[str] = None):
+                 org_id: Optional[str] = None,
+                 sse_base_url: Optional[str] = None):
         self.base_url = base_url.rstrip("/")
+        # Secure Access (SSE) base URL for deployments/admin endpoints
+        self.sse_base_url = (sse_base_url or "https://api.sse.cisco.com").rstrip("/")
         self.token_manager = token_manager
         self.enable_caching = enable_caching
         self.cache_ttl = cache_ttl
@@ -108,8 +111,15 @@ class SecureAccessClient:
                      params: Optional[Dict] = None,
                      json_body: Optional[Dict] = None,
                      headers: Optional[Dict] = None,
-                     retry_on_401: bool = True) -> Any:
-        """Make HTTP request with caching."""
+                     retry_on_401: bool = True,
+                     use_sse: bool = False) -> Any:
+        """Make HTTP request with caching.
+
+        Args:
+            use_sse: If True, use the Secure Access (SSE) base URL instead of the
+                     Umbrella base URL. Required for /deployments and /admin endpoints
+                     on Secure Connect organizations.
+        """
 
         # Build headers
         req_headers = headers or {}
@@ -136,8 +146,9 @@ class SecureAccessClient:
                     except Exception:
                         pass
 
-        # Make actual request
-        url = f"{self.base_url}{path}"
+        # Make actual request — use SSE base URL for deployments/admin endpoints
+        effective_base = self.sse_base_url if use_sse else self.base_url
+        url = f"{effective_base}{path}"
         token = await self.token_manager.get_token(httpx.AsyncClient())
         req_headers["Authorization"] = f"Bearer {token}"
 
@@ -177,23 +188,23 @@ class SecureAccessClient:
         return data
 
     async def get(self, path: str, params: Optional[Dict] = None,
-                 headers: Optional[Dict] = None) -> Any:
+                 headers: Optional[Dict] = None, use_sse: bool = False) -> Any:
         """GET request."""
-        return await self.request("GET", path, params=params, headers=headers)
+        return await self.request("GET", path, params=params, headers=headers, use_sse=use_sse)
 
     async def put(self, path: str, json_body: Optional[Dict] = None,
-                 headers: Optional[Dict] = None) -> Any:
+                 headers: Optional[Dict] = None, use_sse: bool = False) -> Any:
         """PUT request."""
-        return await self.request("PUT", path, json_body=json_body, headers=headers)
+        return await self.request("PUT", path, json_body=json_body, headers=headers, use_sse=use_sse)
 
     async def post(self, path: str, json_body: Optional[Dict] = None,
-                  headers: Optional[Dict] = None) -> Any:
+                  headers: Optional[Dict] = None, use_sse: bool = False) -> Any:
         """POST request."""
-        return await self.request("POST", path, json_body=json_body, headers=headers)
+        return await self.request("POST", path, json_body=json_body, headers=headers, use_sse=use_sse)
 
-    async def delete(self, path: str, headers: Optional[Dict] = None) -> Any:
+    async def delete(self, path: str, headers: Optional[Dict] = None, use_sse: bool = False) -> Any:
         """DELETE request."""
-        return await self.request("DELETE", path, headers=headers)
+        return await self.request("DELETE", path, headers=headers, use_sse=use_sse)
 
 
 # ============================================================================
@@ -668,6 +679,7 @@ if not client_id or not client_secret:
     )
 
 base_url = os.getenv("CISCO_BASE_URL", "https://api.umbrella.com")
+sse_base_url = os.getenv("CISCO_SSE_BASE_URL", "https://api.sse.cisco.com")
 org_id = os.getenv("CISCO_ORG_ID")
 enable_caching = os.getenv("ENABLE_CACHING", "true").lower() == "true"
 cache_ttl = int(os.getenv("CACHE_TTL_SECONDS", "300"))
@@ -687,7 +699,8 @@ http_client = SecureAccessClient(
     cache_ttl=cache_ttl,
     enable_file_caching=enable_file_caching,
     cache_dir=cache_dir,
-    org_id=org_id
+    org_id=org_id,
+    sse_base_url=sse_base_url
 )
 
 # Create MCP server
@@ -695,34 +708,60 @@ mcp = FastMCP("umbrella-mcp")
 
 
 # ============================================================================
-# Pre-registered Tools (13 tools)
+# Pre-registered Tools (16 tools)
 # ============================================================================
 
 @mcp.tool()
-async def getVpnUserConnections(
-    status: Optional[str] = None,
-    limit: Optional[int] = None,
-    offset: Optional[int] = None
+async def getVpnOverview(
+    time_from: str = "-1days",
+    time_to: str = "now",
+    limit: Optional[int] = None
 ) -> Dict[str, Any]:
-    """List active VPN user connections.
+    """Get a comprehensive VPN/Remote Access overview combining live connections and historical events.
+
+    This tool queries TWO endpoints:
+    1. Live VPN connections (/admin/v2/vpn/userConnections) — currently connected users
+    2. Remote Access Events (/reports/v2/remote-access-events) — historical connect/disconnect logs
+
+    NOTE: The live connections endpoint returns 404 when no users are actively connected
+    (rather than an empty list). This is normal Umbrella API behavior — not an error.
 
     Args:
-        status: Filter by connection status
-        limit: Maximum results per page
-        offset: Pagination offset
+        time_from: Start time for historical events — ISO 8601 or relative like "-1days", "-7days" (default: "-1days")
+        time_to: End time for historical events — ISO 8601 or "now" (default: "now")
+        limit: Maximum historical event results per page
 
     Returns:
-        List of VPN user connections
+        Combined dict with 'live_connections' (current) and 'historical_events' (time range)
     """
-    params = {}
-    if status:
-        params["status"] = status
+    results = {}
+
+    # 1. Try to get live VPN connections (uses SSE base URL for admin endpoints)
+    try:
+        live = await http_client.get("/admin/v2/vpn/userConnections", params={}, use_sse=True)
+        results["live_connections"] = live
+    except Exception as e:
+        error_str = str(e)
+        if "404" in error_str:
+            results["live_connections"] = {
+                "status": "no_active_connections",
+                "note": "No users currently connected via VPN (404 is normal when 0 connected)"
+            }
+        else:
+            results["live_connections"] = {"error": error_str}
+
+    # 2. Get historical remote access events
+    params = {"from": time_from, "to": time_to}
     if limit:
         params["limit"] = min(limit, max_per_page)
-    if offset:
-        params["offset"] = offset
 
-    return await http_client.get("/admin/v2/vpn/userConnections", params=params)
+    try:
+        historical = await http_client.get("/reports/v2/remote-access-events", params=params)
+        results["historical_events"] = historical
+    except Exception as e:
+        results["historical_events"] = {"error": str(e)}
+
+    return results
 
 
 @mcp.tool()
@@ -852,7 +891,18 @@ async def getRemoteAccessEvents(
     limit: Optional[int] = None,
     offset: Optional[int] = None
 ) -> Dict[str, Any]:
-    """Get remote access events.
+    """Get remote access (VPN) events including connect/disconnect history.
+
+    This is the primary endpoint for VPN user activity. Each event contains:
+    - identities: User info (name, email)
+    - connectionevent: 'connected' or 'disconnected'
+    - osversion: Client OS version
+    - publicip/internalip: Connection IPs
+    - tunnel1/tunnel2: Tunnel details
+    - reason: Disconnect reason (e.g., ACCT_DISC_SESS_TIMEOUT)
+    - timestamp: Unix timestamp of the event
+
+    TIP: Use getVpnOverview for a combined live + historical view.
 
     Args:
         time_from: Start time — ISO 8601 format or relative like "-1days", "-7days" (default: "-1days")
@@ -861,7 +911,7 @@ async def getRemoteAccessEvents(
         offset: Pagination offset
 
     Returns:
-        Remote access events
+        Remote access events with connection/disconnection details
     """
     params = {"from": time_from, "to": time_to}
     if limit:
@@ -958,7 +1008,7 @@ async def getRoamingComputers(
     if offset:
         params["offset"] = offset
 
-    result = await http_client.get("/deployments/v2/roamingcomputers", params=params)
+    result = await http_client.get("/deployments/v2/roamingcomputers", params=params, use_sse=True)
     # Umbrella returns a list for this endpoint; wrap it for consistent MCP response
     if isinstance(result, list):
         return {"result": result, "count": len(result)}
@@ -967,22 +1017,90 @@ async def getRoamingComputers(
 
 @mcp.tool()
 async def getNetworkTunnelGroups() -> Dict[str, Any]:
-    """Get all network tunnel groups.
+    """Get all network tunnel groups (Secure Connect / IPsec tunnels).
+
+    Returns tunnel group configurations including:
+    - Tunnel name, ID, and type (Secure Internet Access, etc.)
+    - Site assignment and data center location
+    - Provisioning status (Active, Inactive, Unestablished)
 
     Returns:
         List of network tunnel groups
     """
-    return await http_client.get("/deployments/v2/networktunnelgroups")
+    return await http_client.get("/deployments/v2/networktunnelgroups", use_sse=True)
 
 
 @mcp.tool()
 async def getNetworkTunnelGroupStates() -> Dict[str, Any]:
-    """Get network tunnel group states.
+    """Get network tunnel group states (active/inactive/unestablished status).
+
+    Returns the operational state of all configured tunnels. Use this to check
+    which tunnels are currently up and passing traffic vs down or unestablished.
 
     Returns:
-        Network tunnel group states
+        Network tunnel group states with status for each tunnel
     """
-    return await http_client.get("/deployments/v2/networktunnelgroupsstate")
+    return await http_client.get("/deployments/v2/networktunnelgroupsstate", use_sse=True)
+
+
+@mcp.tool()
+async def getNetworkTunnelGroupById(
+    tunnel_group_id: str
+) -> Dict[str, Any]:
+    """Get detailed configuration for a specific network tunnel group by ID.
+
+    Args:
+        tunnel_group_id: The ID of the tunnel group to retrieve
+
+    Returns:
+        Detailed tunnel group configuration including peers, site, and DC location
+    """
+    return await http_client.get(f"/deployments/v2/networktunnelgroups/{tunnel_group_id}", use_sse=True)
+
+
+@mcp.tool()
+async def getNetworkTunnelGroupPeers(
+    tunnel_group_id: str
+) -> Dict[str, Any]:
+    """Get the IPsec peers (tunnel endpoints) for a specific tunnel group.
+
+    Args:
+        tunnel_group_id: The ID of the tunnel group
+
+    Returns:
+        List of IPsec peers with their configuration and status
+    """
+    return await http_client.get(f"/deployments/v2/networktunnelgroups/{tunnel_group_id}/peers", use_sse=True)
+
+
+@mcp.tool()
+async def getNetworkTunnelLogs(
+    time_from: str = "-1days",
+    time_to: str = "now",
+    limit: Optional[int] = None,
+    offset: Optional[int] = None
+) -> Dict[str, Any]:
+    """Get network tunnel logs showing tunnel up/down events and traffic stats.
+
+    Use this to troubleshoot tunnel flapping, identify connectivity issues,
+    and track tunnel establishment/teardown events over time.
+
+    Args:
+        time_from: Start time — ISO 8601 format or relative like "-1days", "-7days" (default: "-1days")
+        time_to: End time — ISO 8601 format or "now" (default: "now")
+        limit: Maximum results per page
+        offset: Pagination offset
+
+    Returns:
+        Tunnel log events with timestamps, tunnel IDs, and status changes
+    """
+    params = {"from": time_from, "to": time_to}
+    if limit:
+        params["limit"] = min(limit, max_per_page)
+    if offset:
+        params["offset"] = offset
+
+    return await http_client.get("/reports/v2/network-tunnel-logs", params=params)
 
 
 # ============================================================================
@@ -1027,15 +1145,18 @@ async def call_umbrella_api(
     if read_only_mode and method != "GET":
         return {"error": "Write operations disabled (READ_ONLY_MODE enabled)"}
 
+    # Auto-detect SSE base URL for deployments and admin endpoints
+    use_sse = section in ("deployments", "admin")
+
     try:
         if method == "GET":
-            return await http_client.get(path, params=params if params else None)
+            return await http_client.get(path, params=params if params else None, use_sse=use_sse)
         elif method == "PUT":
-            return await http_client.put(path, json_body=params if params else None)
+            return await http_client.put(path, json_body=params if params else None, use_sse=use_sse)
         elif method == "POST":
-            return await http_client.post(path, json_body=params if params else None)
+            return await http_client.post(path, json_body=params if params else None, use_sse=use_sse)
         elif method == "DELETE":
-            return await http_client.delete(path)
+            return await http_client.delete(path, use_sse=use_sse)
     except Exception as e:
         return {"error": str(e)}
 
@@ -1172,6 +1293,7 @@ async def get_mcp_config() -> Dict[str, Any]:
     """
     return {
         "base_url": base_url,
+        "sse_base_url": sse_base_url,
         "org_id": org_id if org_id else "Not set (single-tenant mode)",
         "caching_enabled": enable_caching,
         "cache_ttl_seconds": cache_ttl,

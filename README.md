@@ -6,7 +6,7 @@ A production-ready [Model Context Protocol (MCP)](https://modelcontextprotocol.i
 
 - **OAuth2 Authentication** — Automatic token management via client credentials flow with 60-second refresh buffer
 - **87+ API Endpoints** — Covers Admin, Deployments, Reports, Investigate, and Policies sections
-- **12 Pre-Registered Tools** — Optimized tools for the most common operations (VPN, DNS, threats, tunnels, etc.)
+- **16 Pre-Registered Tools** — Optimized tools for the most common operations (VPN, DNS, threats, tunnels, etc.)
 - **Generic API Gateway** — `call_umbrella_api` tool provides access to all 87+ registered endpoints
 - **Two-Tier Caching** — In-memory + file-based caching with configurable TTL (default 5 min)
 - **Multi-Tenant Support** — Optional `X-Umbrella-OrgId` header for multi-org environments
@@ -21,7 +21,7 @@ A production-ready [Model Context Protocol (MCP)](https://modelcontextprotocol.i
 │   Claude Desktop /   │     │   Umbrella MCP       │     │   Cisco Umbrella     │
 │   AI Assistant       │────▶│   Server (FastMCP)   │────▶│   API                │
 │                      │ MCP │                      │HTTP │                      │
-│   - 12 direct tools  │◀────│   - OAuth2 tokens    │◀────│   - Reports v2       │
+│   - 16 direct tools  │◀────│   - OAuth2 tokens    │◀────│   - Reports v2       │
 │   - Generic API call │     │   - Request caching  │     │   - Deployments v2   │
 │   - Method discovery │     │   - File caching     │     │   - Policies v2      │
 └──────────────────────┘     └──────────────────────┘     │   - Admin v2         │
@@ -73,6 +73,24 @@ CISCO_CLIENT_SECRET="your-client-secret-here"
 # Optional — set this if API calls return data for the wrong org,
 # or if your account has access to multiple orgs
 CISCO_ORG_ID=""
+```
+
+#### Dual Base URL (Umbrella + Secure Access)
+
+Cisco's API platform uses **two different base URLs** depending on the endpoint type:
+
+| Base URL | Used For | Endpoints |
+|----------|----------|-----------|
+| `https://api.umbrella.com` | Reports, Investigate, Policies | DNS activity, proxy logs, threats, summaries |
+| `https://api.sse.cisco.com` | Deployments, Admin | Tunnel groups, roaming computers, VPN connections |
+
+The MCP server handles this automatically — reports go to Umbrella, while deployments/admin calls route to the Secure Access (SSE) API. Both use the same OAuth2 token.
+
+You can override either base URL via environment variables if needed:
+
+```env
+CISCO_BASE_URL="https://api.umbrella.com"        # Default for reports
+CISCO_SSE_BASE_URL="https://api.sse.cisco.com"    # Default for deployments/admin
 ```
 
 #### Multi-Tenant Setup
@@ -190,24 +208,46 @@ After saving the config, fully restart Claude Desktop. The Umbrella MCP tools sh
 
 ## Available Tools
 
-### Pre-Registered Tools (12)
+### Pre-Registered Tools (16)
 
 These are first-class MCP tools optimized for the most common workflows:
 
+**VPN / Remote Access**
+
 | Tool | Description | Key Parameters |
 |------|-------------|----------------|
-| `getVpnUserConnections` | List active VPN user connections | `status`, `limit`, `offset` |
+| `getVpnOverview` | Combined live connections + historical VPN events | `time_from`, `time_to`, `limit` |
+| `getRemoteAccessEvents` | Historical VPN connect/disconnect logs | `time_from`, `time_to`, `limit`, `offset` |
+
+> **Note:** The live VPN connections endpoint (`/admin/v2/vpn/userConnections`) returns 404 when no users are actively connected. This is normal Umbrella API behavior. The `getVpnOverview` tool handles this gracefully by returning a `no_active_connections` status instead of an error.
+
+**Activity & Reports**
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
 | `getActivityDns` | Query DNS activity records | `time_from`, `time_to`, `verdict`, `domains` |
 | `getActivityProxy` | Query proxy/web activity records | `time_from`, `time_to`, `verdict` |
 | `getActivityFirewall` | Query firewall activity records | `time_from`, `time_to` |
 | `getActivityZtna` | Query ZTNA activity records | `time_from`, `time_to` |
-| `getRemoteAccessEvents` | Get remote access events | `time_from`, `time_to` |
 | `getSummary` | Get summary statistics | `time_from`, `time_to` |
 | `getTopThreats` | Get top threats by count | `time_from`, `time_to`, `limit` |
 | `getTopIdentities` | Get top users/identities | `time_from`, `time_to`, `limit` |
+
+**Network Tunnels**
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `getNetworkTunnelGroups` | List all tunnel groups (Secure Connect / IPsec) | — |
+| `getNetworkTunnelGroupStates` | Get tunnel active/inactive/unestablished states | — |
+| `getNetworkTunnelGroupById` | Get detailed config for a specific tunnel group | `tunnel_group_id` |
+| `getNetworkTunnelGroupPeers` | Get IPsec peers for a tunnel group | `tunnel_group_id` |
+| `getNetworkTunnelLogs` | Tunnel up/down events and traffic logs | `time_from`, `time_to`, `limit` |
+
+**Deployments**
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
 | `getRoamingComputers` | Get endpoint inventory | `limit`, `offset` |
-| `getNetworkTunnelGroups` | Get all tunnel groups | — |
-| `getNetworkTunnelGroupStates` | Get tunnel group states | — |
 
 ### Generic Tools (7)
 
